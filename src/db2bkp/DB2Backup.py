@@ -1,6 +1,8 @@
+from email.mime.text import MIMEText
 import platform
 import re
 import os
+import smtplib
 import subprocess
 import sys
 import shutil
@@ -34,23 +36,45 @@ class DB2Backup():
         return self
 
     def __exit__(self, type, value, traceback):
-        self._env['Backup:completed'] = str(self._completed)
-        self._flush_config()
+        try:
+            self._env['Backup:completed'] = str(self._completed)
+            self._flush_config()
 
-        if self._completed:
-            shutil.copy2(os.path.join(self._env['Backup:home'], 'backup.config'),
-                         os.path.join(self._env['Backup:settings'], 'prev-backup.config'))
-        self._flush_logs()
-        self._cleanup()
+            if self._completed:
+                shutil.copy2(os.path.join(self._env['Backup:home'], 'backup.config'),
+                             os.path.join(self._env['Backup:settings'], 'prev-backup.config'))
+            self._flush_logs()
+            self._cleanup()
+        finally:
+            self._notify()
 
-        #Notification
+    def _notify(self):
+        if 'Notifications' not in self._fcfg:
+            return
+        emails = self._fcfg.get('Notifications', 'emails', fallback=None)
+        if not emails:
+            return
+        emails = re.split('\s*,\s*', emails)
+        if len(emails) < 1:
+            return
+        logfile = os.path.join(self._env['Backup:settings'], 'backup%s.log' % self._env['Backup:timestamp'])
+        with open(logfile) as f:
+            msg = MIMEText(f.read().encode('utf-8'), _charset='utf-8')
+            msg['Subject'] = 'DB2 %s BACKUP OF %s' % (
+                self._fcfg.get('Database', 'name'), ('COMPLETED' if self._completed else 'FAILED') )
+            msg['From'] = self._fcfg.get('Notifications', 'from', fallback='%s@localhost' % self._env['User:home'])
+            msg['To'] = ', '.join(emails)
+
+        s = smtplib.SMTP(self._fcfg.get('Notifications', 'mxhost', fallback='localhost'))
+        #s.set_debuglevel(1)
+        s.send_message(msg)
+        s.quit()
 
     def _flush_logs(self):
         if self._tee is not None:
             sys.stdout.flush()
             sys.stderr.flush()
             self._tee.stdin.flush()
-
 
     def _init_env(self):
         cfg = ConfigParser(interpolation=EnvInterpolation(self._env), allow_no_value=True, strict=False, delimiters='=')
@@ -226,10 +250,10 @@ class DB2Backup():
                 and self._transfered)) and self._env.get('Backup:lastlog'):
             print('PRUNE HISTORY %s AND DELETE' % self._env['Backup:timestamp'])
             self._send_cmd(['db2', '-t'], """
-                CONNECT TO %s;
-                PRUNE HISTORY %s AND DELETE;
-                CONNECT RESET;
-                """ % (self._fcfg.get('Database', 'name'), self._env['Backup:timestamp']))
+                    CONNECT TO %s;
+                    PRUNE HISTORY %s AND DELETE;
+                    CONNECT RESET;
+                    """ % (self._fcfg.get('Database', 'name'), self._env['Backup:timestamp']))
 
         cleanup_older_than = self._to_timedelta(self._fcfg.get('Cleanup', 'cleanup_older_than', fallback=None))
         if cleanup_older_than:
@@ -265,6 +289,7 @@ class DB2Backup():
             pcfg.read(ppath)
             if pcfg.get('Environment', 'backup:completed', fallback=False):
                 self._pcfg = pcfg
+
 
     @staticmethod
     def _send_cmd(args, indata=None):
