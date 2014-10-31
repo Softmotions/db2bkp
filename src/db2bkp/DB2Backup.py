@@ -306,7 +306,8 @@ class DB2Backup():
                                 '\nSTDERR:\n%s\n\n' % (' '.join(args), ret[0], ret[1]))
         return ret[0], ret[1]
 
-    def _ensure_dir_permissions(self, dir, cfg):
+    @staticmethod
+    def _ensure_dir_permissions(dir, cfg):
         dirgroup = cfg.get('System', 'dirgroup', fallback=None)
         if dirgroup and shutil.chown:
             shutil.chown(dir, group=dirgroup)
