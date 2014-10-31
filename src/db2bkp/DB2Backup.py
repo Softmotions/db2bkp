@@ -11,6 +11,7 @@ from collections import OrderedDict
 from configparser import ConfigParser
 import shlex
 from subprocess import check_output, Popen, PIPE
+import traceback
 
 from db2bkp.utils.EnvInterpolation import EnvInterpolation
 
@@ -30,12 +31,13 @@ class DB2Backup():
         self._completed = False
         self._transfered = False
         self._tee = None
+        self.rcode = 0
         self._init_env()
 
     def __enter__(self):
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, etype, evalue, tr):
         try:
             self._env['Backup:completed'] = str(self._completed)
             self._flush_config()
@@ -43,10 +45,14 @@ class DB2Backup():
             if self._completed:
                 shutil.copy2(os.path.join(self._env['Backup:home'], 'backup.config'),
                              os.path.join(self._env['Backup:settings'], 'prev-backup.config'))
-            self._flush_logs()
             self._cleanup()
         finally:
+            if tr:
+                self.rcode = 1
+                traceback.print_exception(etype, evalue, tr, file=sys.stderr)
+            self._flush_logs()
             self._notify()
+            return self.rcode != 0
 
     def _notify(self):
         if 'Notifications' not in self._fcfg:

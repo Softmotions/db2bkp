@@ -19,5 +19,8 @@ if __name__ == '__main__':
     if not options.config:
         parser.error('no configuration file')
 
+    runner = None
     with DB2Backup(options.config, options) as bkp:
+        runner = bkp
         bkp.backup()
+    sys.exit(runner.rcode)
