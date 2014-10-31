@@ -47,7 +47,7 @@ class DB2Backup():
                              os.path.join(self._env['Backup:settings'], 'prev-backup.config'))
             self._cleanup()
         finally:
-            if tr:
+            if etype:
                 self.rcode = 1
                 traceback.print_exception(etype, evalue, tr, file=sys.stderr)
             self._flush_logs()
