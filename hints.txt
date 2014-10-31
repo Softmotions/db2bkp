@@ -1,0 +1,4 @@
+db2 get instance
+db2greg -dump
+
+

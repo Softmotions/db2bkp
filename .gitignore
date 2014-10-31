@@ -1,0 +1,6 @@
+.idea/workspace.xml
+.idea/libraries/*
+__pycache__
+*.pyc
+/.idea
+*.iml
