@@ -66,8 +66,9 @@ class DB2Backup():
         logfile = os.path.join(self._env['Backup:settings'], 'backup%s.log' % self._env['Backup:timestamp'])
         with open(logfile) as f:
             msg = MIMEText(f.read().encode('utf-8'), _charset='utf-8')
-            msg['Subject'] = 'DB2 BACKUP OF %s %s MODE: %s' % (
-                self._fcfg.get('Database', 'name'), ('COMPLETED' if self._completed else 'FAILED'), self.get_backup_mode())
+            msg['Subject'] = 'DB2 BACKUP [%s] OF %s %s' % (
+                self.get_backup_mode(), self._fcfg.get('Database', 'name'),
+                ('COMPLETED' if self._completed else 'FAILED'))
             msg['From'] = self._fcfg.get('Notifications', 'from', fallback='%s@localhost' % self._env['User:home'])
             msg['To'] = ', '.join(emails)
 
