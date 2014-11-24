@@ -66,8 +66,8 @@ class DB2Backup():
         logfile = os.path.join(self._env['Backup:settings'], 'backup%s.log' % self._env['Backup:timestamp'])
         with open(logfile) as f:
             msg = MIMEText(f.read().encode('utf-8'), _charset='utf-8')
-            msg['Subject'] = 'DB2 BACKUP OF %s %s' % (
-                self._fcfg.get('Database', 'name'), ('COMPLETED' if self._completed else 'FAILED') )
+            msg['Subject'] = 'DB2 BACKUP OF %s %s MODE: %s' % (
+                self._fcfg.get('Database', 'name'), ('COMPLETED' if self._completed else 'FAILED'), self.get_backup_mode())
             msg['From'] = self._fcfg.get('Notifications', 'from', fallback='%s@localhost' % self._env['User:home'])
             msg['To'] = ', '.join(emails)
 
@@ -162,7 +162,13 @@ class DB2Backup():
 
     def backup(self):
         self._load_prev_cfg()
-        self._env['Backup:mode'] = 'Full' if self._is_fullbackup_required() else 'Logs'
+        self._env['Backup:full_timestamp'] = self._pcfg.get('Environment', 'backup:full_timestamp', fallback=None)
+        if self._is_fullbackup_required():
+            self._env['Backup:mode'] = 'Full'
+            self._env['Backup:full_timestamp'] = self._env['Backup:timestamp']
+        else:
+            self._env['Backup:mode'] = 'Logs'
+
         print('ENVIRONMENT:\n' + '\n'.join('{0}: {1}'.format(k, v) for k, v in self._env.items()))
         self._flush_config()
         self._full_backup()
@@ -170,6 +176,9 @@ class DB2Backup():
         self._flush_logs()
         self._transfer()
         self._completed = True
+
+    def get_backup_mode(self):
+        return self._env.get('Backup:mode')
 
     def _is_fullbackup_required(self):
         # If previous backup exists
@@ -184,6 +193,14 @@ class DB2Backup():
                 and prev_ts \
                 and self._bktime >= last_backup_older + dt.datetime.strptime(prev_ts, '%Y%m%d%H%M%S'):
             print('FULL BACKUP REQUIRED: LAST BACKUP OLDER THAN: %s' % last_backup_older)
+            return True
+
+        last_backup_older = self._to_timedelta(self._fcfg.get('FullBackupWhen', 'full_backup_older', fallback=None))
+        prev_ts = self._env.get('Backup:full_timestamp')
+        if last_backup_older \
+                and (prev_ts is None or self._bktime >= last_backup_older + dt.datetime.strptime(prev_ts,
+                                                                                                 '%Y%m%d%H%M%S')):
+            print('FULL BACKUP REQUIRED: LAST FULL BACKUP OLDER THAN: %s' % last_backup_older)
             return True
 
         # Check number of logs
@@ -251,9 +268,15 @@ class DB2Backup():
             self._cleanup_completed()
 
     def _cleanup_completed(self):
-        if (self._fcfg.getboolean('Cleanup', 'prune_logs', fallback=False)
-            or (self._fcfg.getboolean('Cleanup', 'prune_logs_if_transfered', fallback=False)
-                and self._transfered)) and self._env.get('Backup:lastlog'):
+        prune = self._fcfg.getboolean('Cleanup', 'prune_logs', fallback=False)
+        if not prune:
+            prune = (self._fcfg.getboolean('Cleanup', 'prune_logs_if_transfered', fallback=False)
+                     and self._transfered)
+        if not prune:
+            prune = (self._fcfg.getboolean('Cleanup', 'prune_logs_if_full', fallback=False)
+                     and self._transfered
+                     and self._env['Backup:mode'] == 'Full')
+        if prune:
             print('PRUNE HISTORY %s AND DELETE' % self._env['Backup:timestamp'])
             self._send_cmd(['db2', '-t'], """
                     CONNECT TO %s;
