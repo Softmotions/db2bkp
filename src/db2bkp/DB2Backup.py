@@ -17,7 +17,7 @@ from db2bkp.utils.EnvInterpolation import EnvInterpolation
 
 
 class DB2Backup():
-    _LOGARCH_RE = re.compile('^[^\(\)]+\s*(\(LOGARCHMETH\d+\))\s*=\s*DISK:(.*)$', re.MULTILINE)
+    _LOGARCH_RE = re.compile('^[^()]+\s*(\(LOGARCHMETH\d+\))\s*=\s*DISK:(.*)$', re.MULTILINE)
     _ARCHPATHS_RE = re.compile('^\s*Path to log files\s*=\s*.*/(NODE\d{4})/(SQL\d{5})/(LOGSTREAM\d{4})/$', re.MULTILINE)
     _LOGFILE = re.compile('^S\d{7}.LOG$')
 
