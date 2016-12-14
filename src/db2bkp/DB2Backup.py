@@ -218,7 +218,7 @@ class DB2Backup():
     def _to_timedelta(spec):
         if spec is None:
             return None
-        spec = re.split('\s*', spec)
+        spec = re.split('\s+', spec)
         units = spec[-1] if len(spec) > 1 else 'days'
         if units not in ['days', 'seconds', 'weeks', 'hours']:
             raise Exception('Invalid timespec: %s' % spec)
