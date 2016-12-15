@@ -275,7 +275,6 @@ class DB2Backup():
                      and self._transfered)
         if not prune:
             prune = (self._fcfg.getboolean('Cleanup', 'prune_logs_if_full', fallback=False)
-                     and self._transfered
                      and self._env['Backup:mode'] == 'Full')
         if prune:
             print('PRUNE HISTORY %s AND DELETE' % self._env['Backup:timestamp'])
